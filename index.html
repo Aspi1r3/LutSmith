@@ -54,7 +54,7 @@
   .sprockets{height:16px;background-image:radial-gradient(3.2px 4.2px at 50% 50%,var(--bath) 97%,transparent 100%);background-size:19px 16px;background-repeat:repeat-x;background-position:center}
   .rebate{display:flex;justify-content:space-between;gap:12px;font:10px/1 var(--mono);letter-spacing:.16em;color:var(--orange);padding:1px 2px 5px;text-transform:uppercase}
   #viewwrap{position:relative;max-width:100%;width:fit-content;margin:0 auto;overflow:hidden}
-  canvas#view{max-width:100%;max-height:52vh;display:block;cursor:ew-resize;transform-origin:top left}
+  canvas#view{display:block;cursor:ew-resize;transform-origin:top left}
   #wipeline{position:absolute;top:0;bottom:0;width:2px;background:var(--orange-hi);display:none;pointer-events:none}
   #wipeline::after{content:"◂ original · graded ▸";position:absolute;top:6px;left:6px;font:9px var(--mono);letter-spacing:.08em;color:var(--orange-hi);white-space:nowrap;background:rgba(12,11,8,.75);padding:3px 6px;border-radius:2px}
   #stagebar{display:none;gap:14px;align-items:center;color:var(--dim);font-size:12px;flex-wrap:wrap;justify-content:center}
@@ -218,7 +218,6 @@
     header button,#supportLink{padding:9px 10px;font-size:11px;flex:1 1 auto;text-align:center;margin-left:0}
 
     #stage{padding:10px;gap:8px;min-height:34vh}
-    canvas#view{max-height:38vh}
     #filmframe{padding:0 8px}
     #drop{padding:34px 18px}
     #stagebar{gap:10px;font-size:12px}
@@ -798,6 +797,20 @@ function resetPreviewZoom(){
   previewZoom.scale=1;previewZoom.x=0;previewZoom.y=0;
   view.style.transform="";
 }
+function fitPreviewToStage(){
+  if(cur<0)return;
+  const stage=$("stage"),frame=$("filmframe"),style=getComputedStyle(stage);
+  const visible=[...stage.children].filter(el=>getComputedStyle(el).display!=="none");
+  const otherHeight=visible.filter(el=>el!==frame).reduce((sum,el)=>sum+el.offsetHeight,0);
+  const gap=(visible.length-1)*(parseFloat(style.rowGap)||parseFloat(style.gap)||0);
+  const frameChrome=frame.offsetHeight-viewwrap.offsetHeight;
+  const width=stage.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-32;
+  const height=stage.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-otherHeight-gap-frameChrome;
+  const image=images[cur].data,scale=Math.max(0.01,Math.min(width/image.width,height/image.height));
+  view.style.width=Math.floor(image.width*scale)+"px";
+  view.style.height=Math.floor(image.height*scale)+"px";
+  applyPreviewZoom();
+}
 function clampPreviewPan(){
   const r=viewwrap.getBoundingClientRect();
   previewZoom.x=Math.min(0,Math.max(r.width-view.offsetWidth*previewZoom.scale,previewZoom.x));
@@ -850,12 +863,14 @@ function refreshUIAfterLoad(){
   $("thumbs").style.display=images.length>1?"flex":"none";
   $("scopes").style.display=$("scopeOn").checked?"flex":"none";
   $("export").disabled=false;
+  requestAnimationFrame(fitPreviewToStage);
 }
 function selectImage(i){
   cur=i;
   images.forEach((im,k)=>im.wrap.classList.toggle("on",k===i));
   resetPreviewZoom();
   view.width=images[i].data.width;view.height=images[i].data.height;
+  requestAnimationFrame(fitPreviewToStage);
   render();
 }
 function loadFiles(list){
@@ -1453,9 +1468,10 @@ $("clipOn").addEventListener("change",()=>{
   render();
 });
 $("scopeOn").addEventListener("change",()=>{
-  $("scopes").style.display=$("scopeOn").checked&&cur>=0?"flex":"none";render();
+  $("scopes").style.display=$("scopeOn").checked&&cur>=0?"flex":"none";requestAnimationFrame(fitPreviewToStage);render();
 });
-window.addEventListener("resize",positionWipe);
+new ResizeObserver(()=>fitPreviewToStage()).observe($("stage"));
+window.addEventListener("resize",fitPreviewToStage);
 
 /* ================= base LUT import ================= */
 $("importLut").addEventListener("click",()=>$("lutfile").click());
